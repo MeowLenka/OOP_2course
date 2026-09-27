@@ -14,8 +14,7 @@ struct CategoricalColumn
     std::vector<std::optional<std::string>> values;
 };
 
-using ColumnData =
-    std::variant<NumericColumn, CategoricalColumn>;
+using ColumnData = std::variant<NumericColumn, CategoricalColumn>;
 
 struct Column
 {
