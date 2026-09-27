@@ -15,9 +15,15 @@ struct ColumnStatistics
     std::optional<double> max;
     std::optional<double> mean;
     std::optional<double> var;
+
+    std::optional<double> q05;
+    std::optional<double> q25;
     std::optional<double> q50;
+    std::optional<double> q75;
+    std::optional<double> q95;
 };
 
 ColumnStatistics get_statistics(const NumericColumn &column);
+double get_quantile(const std::vector<double> &values, double probability);
 
 #endif

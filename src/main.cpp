@@ -55,8 +55,16 @@ int main()
             if (stats.mean.has_value())
                 std::cout << "среднее: " << stats.mean.value() << '\n';
 
-            if (stats.median.has_value())
-                std::cout << "медиана: " << stats.median.value() << '\n';
+            if (stats.q05.has_value())
+                std::cout << "q05: " << stats.q05.value() << ' ';
+            if (stats.q25.has_value())
+                std::cout << "q25: " << stats.q25.value() << ' ';
+            if (stats.q50.has_value())
+                std::cout << "q50: " << stats.q50.value() << ' ';
+            if (stats.q75.has_value())
+                std::cout << "q75: " << stats.q75.value() << ' ';
+            if (stats.q95.has_value())
+                std::cout << "q95: " << stats.q95.value() << '\n';
         }
     }
 
