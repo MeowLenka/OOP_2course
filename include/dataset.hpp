@@ -1,21 +1,32 @@
-#include <iostream>
+#ifndef DATASET_HPP
+#define DATASET_HPP
 
-char separator = ',';
-std::string skip = "NA";
+#include <string>
+#include <vector>
 
-struct NumericColumn {
+struct NumericColumn
+{
     std::vector<std::optional<double>> values;
 };
 
-struct CategoricalColumn {
+struct CategoricalColumn
+{
     std::vector<std::optional<std::string>> values;
 };
 
-using Column =
+using ColumnData =
     std::variant<NumericColumn, CategoricalColumn>;
+
+struct Column
+{
+    std::string name;
+    ColumnData data;
+};
 
 struct Dataset
 {
-    /* data */
+    std::vector<Column> columns;
+    std::size_t row_count = 0;
 };
 
+#endif
