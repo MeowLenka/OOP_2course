@@ -23,7 +23,7 @@ double get_quantile(const std::vector<double> &values, double probability)
     return values[left_index] + fraction * (values[right_index] - values[left_index]);
 }
 
-ColumnStatistics get_statistics(const NumericColumn &column)
+ColumnStatistics get_statistics(const NumericColumn &column, std::size_t bin_count)
 {
     ColumnStatistics stats;
     std::vector<double> values;
@@ -53,5 +53,14 @@ ColumnStatistics get_statistics(const NumericColumn &column)
     stats.q75 = get_quantile(values, 0.75);
     stats.q95 = get_quantile(values, 0.95);
 
+    double sum_sq_dev = 0.0;
+    for (double value : values)
+    {
+        double difference = value - stats.mean.value();
+        sum_sq_dev += difference * difference;
+    }
+    stats.var = sum_sq_dev / values.size();
+
+    stats.histogram = get_histogram(values, bin_count);
     return stats;
 }

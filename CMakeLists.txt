@@ -10,6 +10,7 @@ add_executable(lab1
     src/main.cpp
     src/csv_loader.cpp
     src/statistics.cpp
+    src/histogram.cpp
 )
 
 target_include_directories(lab1 PRIVATE

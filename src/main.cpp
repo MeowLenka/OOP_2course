@@ -5,6 +5,34 @@
 #include <iomanip>
 #include <variant>
 
+void print_histogram(const std::vector<HistogramBin> &histogram, std::size_t max_bar_length = 30)
+{
+    if (histogram.empty())
+    {
+        std::cout << "Гистограмма пуста.\n";
+        return;
+    }
+
+    std::size_t max_number = 0;
+
+    for (const HistogramBin &bin : histogram)
+        max_number = std::max(max_number, bin.number);
+
+    for (const HistogramBin &bin : histogram)
+    {
+        std::size_t bar_length = 0;
+        if (max_number > 0)
+        {
+            bar_length = static_cast<std::size_t>(ceil(static_cast<double>(bin.number) * max_bar_length / max_number));
+        }
+        std::string bar(bar_length, '#');
+        std::string interval = "  [" + std::format("{:.1f}", bin.lower_bound) + ", " + std::format("{:.1f}", bin.upper_bound) + ")";
+        
+        std::cout << std::left << std::setw(18) << interval 
+        << std::left << std::setw(static_cast<int>(max_bar_length)) << bar << "  " << bin.number << '\n';
+    }
+}
+
 int main()
 {
     CsvLoadResult result = load_csv("data/dataset.csv");
@@ -65,6 +93,11 @@ int main()
                 std::cout << "q75: " << stats.q75.value() << ' ';
             if (stats.q95.has_value())
                 std::cout << "q95: " << stats.q95.value() << '\n';
+
+            if (stats.var.has_value())
+                std::cout << "дисперсия: " << stats.var.value() << '\n';
+
+            print_histogram(stats.histogram);
         }
     }
 
