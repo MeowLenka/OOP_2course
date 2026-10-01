@@ -7,15 +7,19 @@
 #include <optional>
 
 
-struct HistogramBin
-{
+struct NumericHistogramBin {
     double lower_bound = 0.0;
     double upper_bound = 0.0;
     std::size_t number = 0;
 };
 
+struct CategoricalHistogramBin {
+    std::string category;
+    std::size_t number = 0;
+};
 
-struct ColumnStatistics
+
+struct NumericStatistics
 {
     std::size_t count = 0;
     std::size_t missing_count = 0;
@@ -31,11 +35,25 @@ struct ColumnStatistics
     std::optional<double> q75;
     std::optional<double> q95;
 
-    std::vector<HistogramBin> histogram;
+    std::vector<NumericHistogramBin> histogram;
 };
 
-ColumnStatistics get_statistics(const NumericColumn& column, std::size_t bin_count = 5);
+struct CategoricalStatistics {
+    std::size_t count = 0;
+    std::size_t missing_count = 0;
+
+    std::vector<std::string> categories;
+    std::vector<CategoricalHistogramBin> histogram;
+};
+
+using Statistics = std::variant<NumericStatistics, CategoricalStatistics>;
+
 double get_quantile(const std::vector<double> &values, double probability);
-std::vector<HistogramBin> get_histogram(const std::vector<double>& values, std::size_t bin_count = 5);
+
+CategoricalStatistics get_categorical_statistics(const CategoricalColumn &column);
+NumericStatistics get_numeric_statistics(const NumericColumn &column, std::size_t bin_count = 7);
+
+std::vector<NumericHistogramBin> get_numeric_histogram(const std::vector<double>& values, std::size_t bin_count = 7);
+std::vector<CategoricalHistogramBin> get_categorical_histogram(const std::vector<std::string>& values);
 
 #endif

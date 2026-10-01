@@ -5,20 +5,50 @@
 #include <iomanip>
 #include <variant>
 
-void print_histogram(const std::vector<HistogramBin> &histogram, std::size_t max_bar_length = 30)
+void print_numeric_stats(const NumericStatistics &stats, std::size_t max_bar_length = 30)
 {
+    std::cout << "(числовой)\n";
+    std::cout << "всего значений: " << stats.count << '\n';
+    std::cout << "пропусков: " << stats.missing_count << '\n';
+
+    std::cout << std::fixed << std::setprecision(2);
+
+    if (stats.min.has_value())
+        std::cout << "min: " << stats.min.value() << '\n';
+
+    if (stats.max.has_value())
+        std::cout << "max: " << stats.max.value() << '\n';
+
+    if (stats.mean.has_value())
+        std::cout << "mean: " << stats.mean.value() << '\n';
+
+    if (stats.var.has_value())
+        std::cout << "var: " << stats.var.value() << '\n';
+
+    if (stats.q05.has_value())
+        std::cout << "q05: " << stats.q05.value() << ' ';
+    if (stats.q25.has_value())
+        std::cout << "q25: " << stats.q25.value() << ' ';
+    if (stats.q50.has_value())
+        std::cout << "q50: " << stats.q50.value() << ' ';
+    if (stats.q75.has_value())
+        std::cout << "q75: " << stats.q75.value() << ' ';
+    if (stats.q95.has_value())
+        std::cout << "q95: " << stats.q95.value() << '\n';
+
+    const std::vector<NumericHistogramBin> &histogram = stats.histogram;
+
     if (histogram.empty())
     {
-        std::cout << "Гистограмма пуста.\n";
+        std::cout << "гистограмма пуста.\n";
         return;
     }
-
     std::size_t max_number = 0;
 
-    for (const HistogramBin &bin : histogram)
+    for (const NumericHistogramBin &bin : histogram)
         max_number = std::max(max_number, bin.number);
 
-    for (const HistogramBin &bin : histogram)
+    for (const NumericHistogramBin &bin : histogram)
     {
         std::size_t bar_length = 0;
         if (max_number > 0)
@@ -27,9 +57,49 @@ void print_histogram(const std::vector<HistogramBin> &histogram, std::size_t max
         }
         std::string bar(bar_length, '#');
         std::string interval = "  [" + std::format("{:.1f}", bin.lower_bound) + ", " + std::format("{:.1f}", bin.upper_bound) + ")";
-        
-        std::cout << std::left << std::setw(18) << interval 
-        << std::left << std::setw(static_cast<int>(max_bar_length)) << bar << "  " << bin.number << '\n';
+
+        std::cout << std::left << std::setw(18) << interval
+                  << std::left << std::setw(static_cast<int>(max_bar_length)) << bar << "  " << bin.number << '\n';
+    }
+}
+
+void print_categorical_stats(const CategoricalStatistics &stats, std::size_t max_bar_length = 30)
+{
+    std::cout << "(категориальный)\n";
+    std::cout << "всего значений: " << stats.count << '\n';
+    std::cout << "пропусков: " << stats.missing_count << '\n';
+    std::cout << "список категорий:\n";
+
+    std::size_t max_cat_num = 10;
+    for (const std::string &category : stats.categories)
+    {
+        std::cout << "  -> " << category << '\n';
+        if (--max_cat_num == 0)
+            break;
+    }
+    std::cout << '\n';
+
+    const std::vector<CategoricalHistogramBin> &histogram = stats.histogram;
+    if (histogram.empty())
+    {
+        std::cout << "гистограмма пуста.\n";
+        return;
+    }
+    std::size_t max_number = 0;
+
+    for (const CategoricalHistogramBin &bin : histogram)
+        max_number = std::max(max_number, bin.number);
+
+    for (const CategoricalHistogramBin &bin : histogram)
+    {
+        std::size_t bar_length = 0;
+        if (max_number > 0)
+        {
+            bar_length = static_cast<std::size_t>(ceil(static_cast<double>(bin.number) * max_bar_length / max_number));
+        }
+        std::string bar(bar_length, '#');
+        std::cout << "  " << std::left << std::setw(25) << bin.category
+            << std::left << std::setw(static_cast<int>(max_bar_length)) << bar << "  " << bin.number << '\n';
     }
 }
 
@@ -50,56 +120,25 @@ int main()
 
     for (const Column &column : result.dataset.columns)
     {
-        std::cout << "- " << column.name << ": ";
-
-        if (std::holds_alternative<NumericColumn>(column.data))
-            std::cout << "числовой";
-        else
-            std::cout << "категориальный";
-
-        std::cout << '\n';
-    }
-
-    for (const Column &column : result.dataset.columns)
-    {
         if (std::holds_alternative<NumericColumn>(column.data))
         {
+            std::cout << "\n - " << column.name ;
             const NumericColumn &numeric_column = std::get<NumericColumn>(column.data);
-
-            ColumnStatistics stats = get_statistics(numeric_column);
-
-            std::cout << "\n- " << column.name << '\n';
-            std::cout << "количество значений: " << stats.count << '\n';
-            std::cout << "количество пропусков: " << stats.missing_count << '\n';
-
-            std::cout << std::fixed << std::setprecision(2);
-
-            if (stats.min.has_value())
-                std::cout << "минимум: " << stats.min.value() << '\n';
-
-            if (stats.max.has_value())
-                std::cout << "максимум: " << stats.max.value() << '\n';
-
-            if (stats.mean.has_value())
-                std::cout << "среднее: " << stats.mean.value() << '\n';
-
-            if (stats.q05.has_value())
-                std::cout << "q05: " << stats.q05.value() << ' ';
-            if (stats.q25.has_value())
-                std::cout << "q25: " << stats.q25.value() << ' ';
-            if (stats.q50.has_value())
-                std::cout << "q50: " << stats.q50.value() << ' ';
-            if (stats.q75.has_value())
-                std::cout << "q75: " << stats.q75.value() << ' ';
-            if (stats.q95.has_value())
-                std::cout << "q95: " << stats.q95.value() << '\n';
-
-            if (stats.var.has_value())
-                std::cout << "дисперсия: " << stats.var.value() << '\n';
-
-            print_histogram(stats.histogram);
+            const NumericStatistics &numeric_stats = get_numeric_statistics(numeric_column);
+            print_numeric_stats(numeric_stats);
+        }
+        else
+        {
+            if (column.name == "\"\"")
+                continue;
+            else
+            {
+                std::cout << "\n - " << column.name ;
+                const CategoricalColumn &categorical_column = std::get<CategoricalColumn>(column.data);
+                const CategoricalStatistics &categorical_stats = get_categorical_statistics(categorical_column);
+                print_categorical_stats(categorical_stats);
+            }
         }
     }
-
     return 0;
 }

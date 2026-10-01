@@ -1,15 +1,15 @@
 #include "statistics.hpp"
 
-#include <algorithm>
-#include <stdexcept>
+#include <map>
+#include <string>
 #include <vector>
 
-std::vector<HistogramBin> get_histogram(const std::vector<double> &values, std::size_t bin_count)
+std::vector<NumericHistogramBin> get_numeric_histogram(const std::vector<double> &values, std::size_t bin_count)
 {
     if (bin_count == 0)
         throw std::invalid_argument("Количество интервалов должно быть больше 0");
 
-    std::vector<HistogramBin> histogram;
+    std::vector<NumericHistogramBin> histogram;
 
     if (values.empty())
         return histogram;
@@ -22,7 +22,7 @@ std::vector<HistogramBin> get_histogram(const std::vector<double> &values, std::
     {
         for (std::size_t i = 0; i < bin_count; ++i)
         {
-            HistogramBin bin;
+            NumericHistogramBin bin;
 
             bin.lower_bound = min_value;
             bin.upper_bound = max_value;
@@ -37,7 +37,7 @@ std::vector<HistogramBin> get_histogram(const std::vector<double> &values, std::
 
     for (std::size_t i = 0; i < bin_count; ++i)
     {
-        HistogramBin bin;
+        NumericHistogramBin bin;
         bin.lower_bound = min_value + i * width;
         bin.upper_bound = min_value + (i + 1) * width;
         bin.number = 0;
@@ -52,5 +52,23 @@ std::vector<HistogramBin> get_histogram(const std::vector<double> &values, std::
         ++histogram[bin_index].number;
     }
 
+    return histogram;
+}
+
+std::vector<CategoricalHistogramBin> get_categorical_histogram(const std::vector<std::string> &values)
+{
+    std::map<std::string, std::size_t> numbers;
+    for (const std::string &value : values)
+        ++numbers[value];
+
+    std::vector<CategoricalHistogramBin> histogram;
+
+    for (const auto &[category, num] : numbers)
+    {
+        CategoricalHistogramBin bin;
+        bin.category = category;
+        bin.number = num;
+        histogram.push_back(bin);
+    }
     return histogram;
 }

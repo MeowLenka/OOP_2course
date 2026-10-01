@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <numeric>
+#include <type_traits>
 
 double get_quantile(const std::vector<double> &values, double probability)
 {
@@ -23,9 +24,9 @@ double get_quantile(const std::vector<double> &values, double probability)
     return values[left_index] + fraction * (values[right_index] - values[left_index]);
 }
 
-ColumnStatistics get_statistics(const NumericColumn &column, std::size_t bin_count)
+NumericStatistics get_numeric_statistics(const NumericColumn &column, std::size_t bin_count)
 {
-    ColumnStatistics stats;
+    NumericStatistics stats;
     std::vector<double> values;
     for (const auto &value : column.values)
     {
@@ -61,6 +62,30 @@ ColumnStatistics get_statistics(const NumericColumn &column, std::size_t bin_cou
     }
     stats.var = sum_sq_dev / values.size();
 
-    stats.histogram = get_histogram(values, bin_count);
+    stats.histogram = get_numeric_histogram(values, bin_count);
+    return stats;
+}
+
+CategoricalStatistics get_categorical_statistics(const CategoricalColumn &column)
+{
+    CategoricalStatistics stats;
+    std::vector<std::string> values;
+
+    for (const auto &value : column.values)
+    {
+        if (value.has_value())
+            values.push_back(value.value());
+        else
+            ++stats.missing_count;
+    }
+
+    stats.count = values.size();
+    stats.histogram = get_categorical_histogram(values);
+
+    for (const auto &bin : stats.histogram)
+    {
+        stats.categories.push_back(bin.category);
+    }
+
     return stats;
 }
