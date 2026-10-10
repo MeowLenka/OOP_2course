@@ -206,7 +206,7 @@ CsvLoadResult load_csv(const std::string &path, const CsvConfig &config)
 
             column.data = std::move(categorical_column);
         }
-
+        result.dataset.path = path;
         result.dataset.columns.push_back(std::move(column));
     }
 

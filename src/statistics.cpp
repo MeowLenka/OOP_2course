@@ -1,10 +1,8 @@
 #include "statistics.hpp"
 
-#include <algorithm>
 #include <numeric>
-#include <type_traits>
 
-double get_quantile(const std::vector<double> &values, double probability)
+double get_quantile(std::span<const double> values, double probability)
 {
     if (values.empty())
     {
@@ -88,4 +86,31 @@ CategoricalStatistics get_categorical_statistics(const CategoricalColumn &column
     }
 
     return stats;
+}
+
+DatasetInfo get_dataset_info(const Dataset &dataset, std::size_t bin_count)
+{
+    DatasetInfo result;
+
+    for (const Column &column : dataset.columns)
+    {
+        FeatureInfo feature;
+
+        feature.name = column.name;
+
+        if (std::holds_alternative<NumericColumn>(column.data))
+        {
+            const NumericColumn &numeric_column = std::get<NumericColumn>(column.data);
+            feature.statistics = get_numeric_statistics(numeric_column, bin_count);
+        }
+        else
+        {
+            const CategoricalColumn &categorical_column = std::get<CategoricalColumn>(column.data);
+            feature.statistics = get_categorical_statistics(categorical_column);
+        }
+
+        result.features.push_back(std::move(feature));
+    }
+
+    return result;
 }

@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-std::vector<NumericHistogramBin> get_numeric_histogram(const std::vector<double> &values, std::size_t bin_count)
+std::vector<NumericHistogramBin> get_numeric_histogram(std::span<const double> values, std::size_t bin_count)
 {
     if (bin_count == 0)
         throw std::invalid_argument("Количество интервалов должно быть больше 0");

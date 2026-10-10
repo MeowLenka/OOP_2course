@@ -11,8 +11,15 @@ add_executable(lab1
     src/csv_loader.cpp
     src/statistics.cpp
     src/histogram.cpp
+    src/matrix.cpp
+    src/preprocessing.cpp
 )
 
 target_include_directories(lab1 PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
+
+# target_link_libraries(lab1_tests
+#     PRIVATE
+#     lab1
+# )

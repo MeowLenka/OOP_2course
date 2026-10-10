@@ -26,6 +26,7 @@ struct Dataset
 {
     std::vector<Column> columns;
     std::size_t row_count = 0;
+    std::string path;
 };
 
 #endif
