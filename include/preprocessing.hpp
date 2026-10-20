@@ -16,12 +16,15 @@ enum class NumericRefill
 
 enum class Scaling
 {
-    Standard
+    Standard,
+    MinMax,
+    Robust
 };
 
 enum class CategoricalEncoding
 {
-    OneHot
+    OneHot,
+    Ordinal
 };
 
 struct TransformedDataset

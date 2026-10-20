@@ -25,8 +25,7 @@ namespace
         return column.name == "";
     }
 
-    std::vector<std::string> get_categories_for_encoding(
-        const CategoricalStatistics &statistics)
+    std::vector<std::string> get_categories_for_encoding(const CategoricalStatistics &statistics)
     {
         std::vector<std::string> categories = statistics.categories;
 
@@ -36,6 +35,15 @@ namespace
         }
 
         return categories;
+    }
+
+    std::size_t ordinal_code(const std::string &value,
+                             const std::vector<std::string> &categories)
+    {
+        for (std::size_t i = 0; i < categories.size(); ++i)
+            if (categories[i] == value)
+                return i;
+        throw std::runtime_error("Категория не найдена при ordinal-кодировании: " + value);
     }
 
     double scale_standard(double value, const NumericStatistics &statistics)
@@ -56,16 +64,53 @@ namespace
         return (value - mean) / standard_deviation;
     }
 
+    double scale_minmax(double value, const NumericStatistics &statistics)
+    {
+        if (!statistics.min.has_value() || !statistics.max.has_value())
+            throw std::runtime_error("Недостаточно статистики для min-max масштабирования");
+
+        const double min = statistics.min.value();
+        const double max = statistics.max.value();
+
+        if (max == min)
+            return 0.0;
+
+        return (value - min) / (max - min);
+    }
+
+    double scale_robust(double value, const NumericStatistics &statistics)
+    {
+        if (!statistics.q50.has_value() || !statistics.q25.has_value() || !statistics.q75.has_value())
+            throw std::runtime_error("Недостаточно статистики для robust масштабирования");
+
+        const double median = statistics.q50.value();
+        const double iqr = statistics.q75.value() - statistics.q25.value();
+
+        if (iqr == 0.0)
+            return 0.0;
+
+        return (value - median) / iqr;
+    }
+
+    double apply_scaling(double value, const NumericStatistics &statistics, Scaling scaling)
+    {
+        switch (scaling)
+        {
+        case Scaling::Standard:
+            return scale_standard(value, statistics);
+        case Scaling::MinMax:
+            return scale_minmax(value, statistics);
+        case Scaling::Robust:
+            return scale_robust(value, statistics);
+        }
+        throw std::invalid_argument("Неизвестный способ масштабирования");
+    }
+
 } // namespace
 
 void impute_missing_values(Dataset &dataset, const DatasetInfo &information,
                            NumericRefill strategy)
 {
-    if (strategy != NumericRefill::Median)
-    {
-        throw std::invalid_argument("Поддерживается только заполнение числовых пропусков медианой");
-    }
-
     for (Column &column : dataset.columns)
     {
         if (is_technical_column(column))
@@ -85,49 +130,38 @@ void impute_missing_values(Dataset &dataset, const DatasetInfo &information,
                         std::get_if<NumericStatistics>(&feature_information.statistics);
 
                     if (numeric_statistics == nullptr)
-                    {
-                        throw std::runtime_error(
-                            "Тип статистики не соответствует "
-                            "числовому признаку: " +
-                            column.name);
-                    }
+                        throw std::runtime_error("Тип статистики не соответствует числовому признаку: " + column.name);
 
-                    if (!numeric_statistics->q50.has_value())
-                    {
-                        throw std::runtime_error(
-                            "Невозможно заполнить пропуски: "
-                            "для признака отсутствует медиана: " +
-                            column.name);
-                    }
+                    double replacement = 0.0;
 
-                    const double median = numeric_statistics->q50.value();
+                    switch (strategy)
+                    {
+                    case NumericRefill::Median:
+                        if (!numeric_statistics->q50.has_value())
+                            throw std::runtime_error(
+                                "Нет медианы для заполнения признака: " + column.name);
+                        replacement = numeric_statistics->q50.value();
+                        break;
+                    case NumericRefill::Mean:
+                        if (!numeric_statistics->mean.has_value())
+                            throw std::runtime_error(
+                                "Нет среднего для заполнения признака: " + column.name);
+                        replacement = numeric_statistics->mean.value();
+                        break;
+                    case NumericRefill::Zero:
+                        replacement = 0.0;
+                        break;
+                    }
 
                     for (std::optional<double> &value : column_data.values)
-                    {
                         if (!value.has_value())
-                            value = median;
-                    }
+                            value = replacement;
                 }
                 else
                 {
-                    const auto *categorical_statistics =
-                        std::get_if<CategoricalStatistics>(&feature_information.statistics);
-
-                    if (categorical_statistics == nullptr)
-                    {
-                        throw std::runtime_error(
-                            "Тип статистики не соответствует "
-                            "категориальному признаку: " +
-                            column.name);
-                    }
-
                     for (std::optional<std::string> &value : column_data.values)
-                    {
                         if (!value.has_value())
-                        {
                             value = "__MISSING__";
-                        }
-                    }
                 }
             },
             column.data);
@@ -138,12 +172,6 @@ TransformedDataset transform_dataset(const Dataset &dataset,
                                      const DatasetInfo &information, Scaling scaling,
                                      CategoricalEncoding encoding)
 {
-    if (scaling != Scaling::Standard)
-        throw std::invalid_argument("Поддерживается только стандартизация");
-
-    if (encoding != CategoricalEncoding::OneHot)
-        throw std::invalid_argument("Поддерживается только One-Hot кодирование");
-
     std::size_t output_columns = 0;
 
     for (const Column &column : dataset.columns)
@@ -164,12 +192,15 @@ TransformedDataset transform_dataset(const Dataset &dataset,
                 std::get_if<CategoricalStatistics>(&feature_information.statistics);
 
             if (categorical_statistics == nullptr)
-            {
                 throw std::runtime_error(
                     "Тип статистики не соответствует категориальному признаку: " + column.name);
-            }
-            output_columns +=
-                get_categories_for_encoding(*categorical_statistics).size();
+
+            const auto categories = get_categories_for_encoding(*categorical_statistics);
+
+            if (encoding == CategoricalEncoding::OneHot)
+                output_columns += categories.size();
+            else
+                output_columns += 1; // ordinal
         }
     }
 
@@ -182,87 +213,89 @@ TransformedDataset transform_dataset(const Dataset &dataset,
     for (const Column &column : dataset.columns)
     {
         if (is_technical_column(column))
-        {
             continue;
-        }
 
         const FeatureInfo &feature_information =
             find_feature_information(information, column.name);
 
-        if (const auto *numeric_column =
-                std::get_if<NumericColumn>(&column.data))
+        if (const auto *numeric_column = std::get_if<NumericColumn>(&column.data))
         {
             const auto *numeric_statistics =
                 std::get_if<NumericStatistics>(&feature_information.statistics);
 
             if (numeric_statistics == nullptr)
-            {
                 throw std::runtime_error(
                     "Тип статистики не соответствует числовому признаку: " + column.name);
-            }
 
             feature_names.push_back(column.name);
 
             for (std::size_t row = 0; row < dataset.row_count; ++row)
             {
                 if (!numeric_column->values[row].has_value())
-                {
                     throw std::runtime_error(
-                        "После заполнения пропусков найден "
-                        "пустой числовой элемент в признаке: " +
-                        column.name);
-                }
+                        "После заполнения пропусков найден пустой числовой элемент: " + column.name);
 
                 matrix(row, output_column) =
-                    scale_standard(numeric_column->values[row].value(), *numeric_statistics);
+                    apply_scaling(numeric_column->values[row].value(), *numeric_statistics, scaling);
             }
             ++output_column;
             continue;
         }
 
-        const auto *categorical_column =
-            std::get_if<CategoricalColumn>(&column.data);
-
+        const auto *categorical_column = std::get_if<CategoricalColumn>(&column.data);
         const auto *categorical_statistics =
             std::get_if<CategoricalStatistics>(&feature_information.statistics);
 
         if (categorical_column == nullptr || categorical_statistics == nullptr)
-        {
             throw std::runtime_error(
-                "Тип данных или статистики не соответствует "
-                "категориальному признаку: " +
-                column.name);
-        }
+                "Тип данных или статистики не соответствует категориальному признаку: " + column.name);
 
         const std::vector<std::string> categories =
             get_categories_for_encoding(*categorical_statistics);
 
-        for (const std::string &category :
-             categories)
+        if (encoding == CategoricalEncoding::OneHot)
         {
-            feature_names.push_back(column.name + "_" + category);
+            for (const std::string &category : categories)
+            {
+                feature_names.push_back(column.name + "_" + category);
+
+                for (std::size_t row = 0; row < dataset.row_count; ++row)
+                {
+                    if (!categorical_column->values[row].has_value())
+                        throw std::runtime_error(
+                            "Пустой категориальный элемент после заполнения: " + column.name);
+
+                    matrix(row, output_column) =
+                        categorical_column->values[row].value() == category ? 1.0 : 0.0;
+                }
+                ++output_column;
+            }
+        }
+        else // ordinal
+        {
+            feature_names.push_back(column.name);
 
             for (std::size_t row = 0; row < dataset.row_count; ++row)
             {
                 if (!categorical_column->values[row].has_value())
-                {
                     throw std::runtime_error(
-                        "После заполнения пропусков найден "
-                        "пустой категориальный элемент в признаке: " +
-                        column.name);
-                }
-                matrix(row, output_column) =
-                    categorical_column->values[row].value() == category ? 1.0 : 0.0;
+                        "Пустой категориальный элемент после заполнения: " + column.name);
+
+                const std::size_t code =
+                    ordinal_code(categorical_column->values[row].value(), categories);
+
+                matrix(row, output_column) = static_cast<double>(code);
             }
             ++output_column;
         }
     }
+
     return TransformedDataset{std::move(matrix), std::move(feature_names)};
 }
 
 TransformedDataset preprocess_dataset(const Dataset &dataset, const DatasetInfo &information,
                                       NumericRefill refill, Scaling scaling,
-                                      CategoricalEncoding encoding) //  
+                                      CategoricalEncoding encoding) 
 {
     Dataset preprocessed_dataset = dataset;
 
