@@ -7,7 +7,6 @@ struct CsvConfig
 {
     char separator = ',';
     std::string skip_value = "NA";
-    // std::string skip_value2 = "";
     bool has_header = true;
 };
 
