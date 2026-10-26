@@ -1,14 +1,24 @@
 // Заполнение пропусков, масштабирование и кодирование категорий.
 
+#undef NDEBUG
+#include <cassert>
+
 #include "preprocessing.hpp"
-#include "test_utils.hpp"
 
 #include <cmath>
+#include <iostream>
+#include <optional>
 #include <string>
+#include <variant>
 #include <vector>
 
 namespace
 {
+    bool nearly_equal(double a, double b, double eps = 1e-12)
+    {
+        return std::fabs(a - b) < eps;
+    }
+
     // Технический столбец "" + категориальный "color" (с пропуском) + числовой "x" (с пропуском).
     Dataset make_dataset()
     {
@@ -36,9 +46,9 @@ namespace
         // Технический столбец пропущен; a, b, __MISSING__ + x.
         const std::vector<std::string> expected_names = {
             "color_a", "color_b", "color___MISSING__", "x"};
-        CHECK(result.feature_names == expected_names);
-        CHECK(result.matrix.rows() == 4);
-        CHECK(result.matrix.columns() == 4);
+        assert(result.feature_names == expected_names);
+        assert(result.matrix.rows() == 4);
+        assert(result.matrix.columns() == 4);
 
         const double expected[4][3] = {
             {0, 1, 0}, // b
@@ -48,13 +58,13 @@ namespace
         };
         for (std::size_t r = 0; r < 4; ++r)
             for (std::size_t c = 0; c < 3; ++c)
-                CHECK_NEAR(result.matrix(r, c), expected[r][c], 1e-12);
+                assert(nearly_equal(result.matrix(r, c), expected[r][c], 1e-12));
 
         // x: пропуск заменён медианой 10, затем min-max: (v - 0) / 50.
-        CHECK_NEAR(result.matrix(0, 3), 0.0, 1e-12);
-        CHECK_NEAR(result.matrix(1, 3), 0.2, 1e-12);
-        CHECK_NEAR(result.matrix(2, 3), 0.2, 1e-12);
-        CHECK_NEAR(result.matrix(3, 3), 1.0, 1e-12);
+        assert(nearly_equal(result.matrix(0, 3), 0.0, 1e-12));
+        assert(nearly_equal(result.matrix(1, 3), 0.2, 1e-12));
+        assert(nearly_equal(result.matrix(2, 3), 0.2, 1e-12));
+        assert(nearly_equal(result.matrix(3, 3), 1.0, 1e-12));
     }
 
     void test_ordinal()
@@ -65,14 +75,14 @@ namespace
         const TransformedDataset result = preprocess_dataset(
             dataset, info, NumericRefill::Median, Scaling::MinMax, CategoricalEncoding::Ordinal);
 
-        CHECK(result.feature_names == (std::vector<std::string>{"color", "x"}));
-        CHECK(result.matrix.columns() == 2);
+        assert(result.feature_names == (std::vector<std::string>{"color", "x"}));
+        assert(result.matrix.columns() == 2);
 
         // Порядок категорий детерминирован: a = 0, b = 1, __MISSING__ = 2.
-        CHECK_NEAR(result.matrix(0, 0), 1.0, 1e-12);
-        CHECK_NEAR(result.matrix(1, 0), 0.0, 1e-12);
-        CHECK_NEAR(result.matrix(2, 0), 2.0, 1e-12);
-        CHECK_NEAR(result.matrix(3, 0), 1.0, 1e-12);
+        assert(nearly_equal(result.matrix(0, 0), 1.0, 1e-12));
+        assert(nearly_equal(result.matrix(1, 0), 0.0, 1e-12));
+        assert(nearly_equal(result.matrix(2, 0), 2.0, 1e-12));
+        assert(nearly_equal(result.matrix(3, 0), 1.0, 1e-12));
     }
 
     void test_scaling_uses_original_statistics()
@@ -84,16 +94,16 @@ namespace
         const auto standard = preprocess_dataset(
             dataset, info, NumericRefill::Median, Scaling::Standard, CategoricalEncoding::OneHot);
         const double sigma = std::sqrt(1400.0 / 3.0);
-        CHECK_NEAR(standard.matrix(0, x), -20.0 / sigma, 1e-9);
-        CHECK_NEAR(standard.matrix(1, x), -10.0 / sigma, 1e-9);
-        CHECK_NEAR(standard.matrix(3, x), 30.0 / sigma, 1e-9);
+        assert(nearly_equal(standard.matrix(0, x), -20.0 / sigma, 1e-9));
+        assert(nearly_equal(standard.matrix(1, x), -10.0 / sigma, 1e-9));
+        assert(nearly_equal(standard.matrix(3, x), 30.0 / sigma, 1e-9));
 
         // Robust: (v - 10) / (30 - 5); заполненное медианой значение даёт 0.
         const auto robust = preprocess_dataset(
             dataset, info, NumericRefill::Median, Scaling::Robust, CategoricalEncoding::OneHot);
-        CHECK_NEAR(robust.matrix(0, x), -0.4, 1e-12);
-        CHECK_NEAR(robust.matrix(2, x), 0.0, 1e-12);
-        CHECK_NEAR(robust.matrix(3, x), 1.6, 1e-12);
+        assert(nearly_equal(robust.matrix(0, x), -0.4, 1e-12));
+        assert(nearly_equal(robust.matrix(2, x), 0.0, 1e-12));
+        assert(nearly_equal(robust.matrix(3, x), 1.6, 1e-12));
     }
 
     void test_refill_strategies()
@@ -108,9 +118,9 @@ namespace
             return std::get<NumericColumn>(copy.columns[2].data).values[2].value();
         };
 
-        CHECK_NEAR(filled_value(NumericRefill::Median), 10.0, 1e-12);
-        CHECK_NEAR(filled_value(NumericRefill::Mean), 20.0, 1e-12);
-        CHECK_NEAR(filled_value(NumericRefill::Zero), 0.0, 1e-12);
+        assert(nearly_equal(filled_value(NumericRefill::Median), 10.0, 1e-12));
+        assert(nearly_equal(filled_value(NumericRefill::Mean), 20.0, 1e-12));
+        assert(nearly_equal(filled_value(NumericRefill::Zero), 0.0, 1e-12));
     }
 
     void test_original_data_and_info_untouched()
@@ -122,22 +132,23 @@ namespace
                                  Scaling::Standard, CategoricalEncoding::OneHot);
 
         // Исходные данные по-прежнему содержат пропуски.
-        CHECK(!std::get<CategoricalColumn>(dataset.columns[1].data).values[2].has_value());
-        CHECK(!std::get<NumericColumn>(dataset.columns[2].data).values[2].has_value());
+        assert(!std::get<CategoricalColumn>(dataset.columns[1].data).values[2].has_value());
+        assert(!std::get<NumericColumn>(dataset.columns[2].data).values[2].has_value());
 
         // В статистике нет служебной категории: исходный набор категорий сохранён.
         const auto &stats = std::get<CategoricalStatistics>(info.features[1].statistics);
-        CHECK(stats.categories == (std::vector<std::string>{"a", "b"}));
-        CHECK(stats.missing_count == 1);
+        assert(stats.categories == (std::vector<std::string>{"a", "b"}));
+        assert(stats.missing_count == 1);
     }
 } // namespace
 
 int main()
 {
-    run_test("test_one_hot", test_one_hot);
-    run_test("test_ordinal", test_ordinal);
-    run_test("test_scaling_uses_original_statistics", test_scaling_uses_original_statistics);
-    run_test("test_refill_strategies", test_refill_strategies);
-    run_test("test_original_data_and_info_untouched", test_original_data_and_info_untouched);
-    return finish_tests("test_preprocessing");
+    test_one_hot();
+    test_ordinal();
+    test_scaling_uses_original_statistics();
+    test_refill_strategies();
+    test_original_data_and_info_untouched();
+    std::cout << "test_preprocessing: OK\n";
+    return 0;
 }

@@ -1,5 +1,12 @@
+// Бинарная сериализация матрицы: запись -> чтение -> сравнение.
+// После чтения печатаются первые строки загруженной матрицы.
+
+// assert должен работать и в Release (-DNDEBUG), поэтому NDEBUG снимается
+// до подключения <cassert>.
+#undef NDEBUG
+#include <cassert>
+
 #include "matrix.hpp"
-#include "test_utils.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -7,6 +14,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <stdexcept>
 
 namespace
 {
@@ -40,25 +48,25 @@ namespace
 
         original.save(path);
 
-        CHECK(std::filesystem::file_size(path) ==
-              header_size + rows * columns * sizeof(double));
+        assert(std::filesystem::file_size(path) ==
+               header_size + rows * columns * sizeof(double));
 
         const Matrix loaded = Matrix::load(path);
 
         print_first_rows(loaded);
 
-        CHECK(loaded.rows() == original.rows());
-        CHECK(loaded.columns() == original.columns());
-        CHECK(loaded.layout() == original.layout());
+        assert(loaded.rows() == original.rows());
+        assert(loaded.columns() == original.columns());
+        assert(loaded.layout() == original.layout());
 
         // Бинарный формат без потерь: сравниваем точно, без допуска.
         for (std::size_t r = 0; r < rows; ++r)
             for (std::size_t c = 0; c < columns; ++c)
-                CHECK(loaded(r, c) == original(r, c));
+                assert(loaded(r, c) == original(r, c));
     }
 } // namespace
 
-void run_all()
+int main()
 {
     const auto directory = std::filesystem::temp_directory_path();
     const auto path = directory / "lab1_matrix_roundtrip_test.bin";
@@ -73,35 +81,84 @@ void run_all()
     check_roundtrip(0, 0, Layout::RowMajor, path);
 
     // Файл не существует.
-    CHECK_THROWS(Matrix::load(directory / "lab1_no_such_file.bin"));
+    {
+        bool thrown = false;
+        try
+        {
+            (void)Matrix::load(directory / "lab1_no_such_file.bin");
+        }
+        catch (const std::runtime_error &)
+        {
+            thrown = true;
+        }
+        assert(thrown);
+    }
 
     // Обрезанный файл (потеряны последние 8 байт данных).
     {
         Matrix matrix(2, 2);
         matrix.save(path);
         std::filesystem::resize_file(path, std::filesystem::file_size(path) - sizeof(double));
-        CHECK_THROWS(Matrix::load(path));
+
+        bool thrown = false;
+        try
+        {
+            (void)Matrix::load(path);
+        }
+        catch (const std::runtime_error &)
+        {
+            thrown = true;
+        }
+        assert(thrown);
     }
 
     // Файл короче заголовка.
     {
-        std::ofstream output(path, std::ios::binary | std::ios::trunc);
-        output << "abc";
+        {
+            std::ofstream output(path, std::ios::binary | std::ios::trunc);
+            output << "abc";
+        }
+
+        bool thrown = false;
+        try
+        {
+            (void)Matrix::load(path);
+        }
+        catch (const std::runtime_error &)
+        {
+            thrown = true;
+        }
+        assert(thrown);
     }
-    CHECK_THROWS(Matrix::load(path));
 
     // Выход за границы матрицы.
     {
         Matrix matrix(2, 2);
-        CHECK_THROWS(matrix(2, 0));
-        CHECK_THROWS(matrix(0, 2));
+
+        bool row_thrown = false;
+        try
+        {
+            (void)matrix(2, 0);
+        }
+        catch (const std::out_of_range &)
+        {
+            row_thrown = true;
+        }
+        assert(row_thrown);
+
+        bool column_thrown = false;
+        try
+        {
+            (void)matrix(0, 2);
+        }
+        catch (const std::out_of_range &)
+        {
+            column_thrown = true;
+        }
+        assert(column_thrown);
     }
 
     std::filesystem::remove(path);
-}
-
-int main()
-{
-    run_test("test_matrix", run_all);
-    return finish_tests("test_matrix");
+    std::cout << "test_matrix: OK\n";
+    return 0;
 }
